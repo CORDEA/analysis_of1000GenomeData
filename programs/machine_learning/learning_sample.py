@@ -61,6 +61,10 @@ class FeatureExtraction:
     def __init__(self, options, args):
         try:
             self._INFILE = args[0]
+
+            items        = _INFILE.split("_")
+            self._CODE   = items[1].upper()
+            self._NUMBER = items[2]
         except:
             print "input file is not specified."
             sys.exit()
@@ -69,8 +73,7 @@ class FeatureExtraction:
     def Initialize(self):
         print "start initialize"
         _INFILE = self._INFILE
-        items   = _INFILE.split("_")
-        CODE    = items[1].upper()
+        _CODE   = self._CODE
 
         with open(_INFILE) as f:
             lines = f.readlines()
@@ -79,16 +82,14 @@ class FeatureExtraction:
         POSITION  = 0
 
         readID = []
-        # for line in lines:
-            # readID.append(str(line.rstrip()))
-            #readID.append(str(line.split(DELIMITER)[POSITION].rstrip()))
+        for line in lines:
+            readID.append(str(line.split(DELIMITER)[POSITION].rstrip()))
 
         with open("sample_population.csv") as f:
             lines = f.readlines()
 
         idDict = {}
         Pass   = False
-        c = 0
         for line in lines:
             tmp = line.rstrip().split(",")
             u"""
@@ -98,33 +99,29 @@ class FeatureExtraction:
             """
 
             # 民族判別SNP(SPC)
-            if tmp[1] == "IBS":
-                c += 1
-            else:
-                idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
-            # if "SPC"  == CODE:
-                # idDict[tmp[0]] = tmp[2]
-                # Pass = True
-            # 民族判別SNP(ASN, AFR, AMR, EUR)
-            # if CODE in ["ASN", "AFR", "AMR", "EUR"]:
-                # if tmp[2] == CODE:
-                    # idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
-                # Pass = True
-            # 民族固有SNP
-            # if not Pass:
-                # if tmp[1] == CODE:
-                    # idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
-                # else:
-                    # idDict[tmp[0]] = "OTH"
-        print c
-        return self.Learning([idDict, readID])
+            if "SPC"  == _CODE:
+                idDict[tmp[0]] = tmp[2]
+                Pass = True
 
-    def Learning(self, data):
+            # 民族判別SNP(ASN, AFR, AMR, EUR)
+            if _CODE in ["ASN", "AFR", "AMR", "EUR"]:
+                if tmp[2] == _CODE:
+                    idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
+                Pass = True
+
+           #  民族固有SNP
+            if not Pass:
+                if tmp[1] == _CODE:
+                    idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
+                else:
+                    idDict[tmp[0]] = "OTH"
+
+        return self.Learning(idDict, readID)
+
+    def Learning(self, idDict, readID):
         print "learning data loading ..."
         ORIGINAL = "ilm_set.vcf"
 
-        idDict = data[0]
-        readID = data[1]
         data_tr  = []
         label_tr = []
         count = 0
@@ -149,16 +146,15 @@ class FeatureExtraction:
                 header = False
             else:
                 rsID = tmp[2]
-                # if rsID in readID:
-                idList.append(rsID)
-                for i in range(len(IDs)):
-                    try:
-                        data_tr[i].append(int(data[IDs[i]]))
-                    except:
-                        data_tr.append([])
-                        data_tr[i].append(int(data[IDs[i]]))
+                if rsID in readID:
+                    idList.append(rsID)
+                    for i in range(len(IDs)):
+                        try:
+                            data_tr[i].append(int(data[IDs[i]]))
+                        except:
+                            data_tr.append([])
+                            data_tr[i].append(int(data[IDs[i]]))
             line = infile.readline()
-        print c
 
         infile.close()
         self.idList = idList
@@ -179,15 +175,23 @@ class FeatureExtraction:
         X = np.array(data_tr)
         Y = np.array(label_tr)
 
+        u"""Grid searchにおけるパラメータ候補群
+        n_estimators : integer
+            決定木を何本作成するか. 
+        max_depth    : integer or None
+            決定木の深さをどこまで許容するか. 
+        bootstrap    : True or False
+            Bootstrapによって得られた標本によって決定木を構築するかどうか. 
+        criterion    : gini or entropy
+            不純度の算出に用いる基準, 質問の選択に関与する.
+
+        ref. http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+        """
         r_pars = [
                 {
-                    # "n_estimators": [10, 20, 30],
-                    "max_depth": [3, None],
-                    # "max_features": [1, 3, 10],
-                    # "min_samples_split": [1, 3, 10],
-                    # "min_samples_leaf": [1, 3, 10],
-                    "bootstrap": [True, False],
-                    "criterion": ["gini", "entropy"]
+                    "max_depth"          : [3, None],
+                    "bootstrap"          : [True, False],
+                    "criterion"          : ["gini", "entropy"]
                     }
                 ]
         data_score = 0.0
@@ -231,8 +235,8 @@ class FeatureExtraction:
     def Prediction(self, data):
         print "start prediction"
         _INFILE = self._INFILE
-        code    = _INFILE.split('_')[1]
-        number  = _INFILE.split('_')[2]
+        _CODE   = self._CODE
+        _NUMBER = self._NUMBER
 
         estimator = data[0]
         classes = data[1]
@@ -259,10 +263,10 @@ class FeatureExtraction:
                 labels = tmp[-1].split("|")
                 tmpLabel = []
                 for l in range(len(labels)):
-                    if code.upper() == "SPC":
+                    if _CODE == "SPC":
                         tmpLabel.append(labels[l])
                         indexList.append(l)
-                    elif idDict[labels[l].split(":")[-1]] == code.upper():
+                    elif idDict[labels[l].split(":")[-1]] == _CODE:
                         tmpLabel.append(labels[l])
                         indexList.append(l)
                 labels = tmpLabel
@@ -276,33 +280,24 @@ class FeatureExtraction:
                             tmpList.append(float(snps[l]))
                     tmpDict[tmp[2]] = tmpList
                 except:
-                    print snps
+                    sys.stderr.write(snps + '\n')
             line = infile.readline()
-
-        print labels
 
         for ID in idList:
             if ID in tmpDict:
-                for i in range(len(tmpDict[ID])):
-                    try:
-                        test[i].append(tmpDict[ID][i])
-                    except:
-                        test.append([])
-                        test[i].append(tmpDict[ID][i])
+                test = createList(test, tmpDict[ID], True)
             else:
-                for i in range(len(labels)):
-                    try:
-                        test[i].append(4.0)
-                    except:
-                        test.append([])
-                        test[i].append(4.0)
-        print len(labels)
+                test = createList(test, labels,      False)
 
         for t in range(len(test)):
+            code = _CODE.lower()
+            filename = "testdata/result/" + code + "/pred_" + _NUMBER + "_" + code
+
             try:
-                outFile = open("testdata/result/" + code + "/pred_" + number + "_" + code, "a")
+                outFile = open(filename, "a")
             except:
-                outFile = open("testdata/result/" + code + "/pred_" + number + "_" + code, "w")
+                outFile = open(filename, "w")
+
             if t == 0:
                 outFile.write("file,result,")
                 for j in range(len(classes)):
@@ -319,6 +314,20 @@ class FeatureExtraction:
                 else:
                     outFile.write(str(prob[0][k]) + ",")
             outFile.close()
+
+    def createList(test, count, flag):
+        for i in range(len(count)):
+            if flag:
+                number = count[i]
+            else:
+                number = 4.0
+
+            try:
+                test[i].append(number)
+            except:
+                test.append([])
+                test[i].append(number)
+        return test
 
 if __name__ == '__main__':
     options, args = optSettings()
