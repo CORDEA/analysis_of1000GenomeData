@@ -1,0 +1,47 @@
+#!/bin/sh
+
+./data_processing.sh proc_input.chr1.vcf chr1
+echo "1process end"
+./data_processing.sh proc_input.chr2.vcf chr2
+echo "2process end"
+./data_processing.sh proc_input.chr3.vcf chr3
+echo "3process end"
+./data_processing.sh proc_input.chr4.vcf chr4
+echo "4process end"
+./data_processing.sh proc_input.chr5.vcf chr5
+echo "5process end"
+./data_processing.sh proc_input.chr6.vcf chr6
+echo "6process end"
+./data_processing.sh proc_input.chr7.vcf chr7
+echo "7process end"
+./data_processing.sh proc_input.chr8.vcf chr8
+echo "8process end"
+./data_processing.sh proc_input.chr9.vcf chr9
+echo "9process end"
+./data_processing.sh proc_input.chr10.vcf chr10
+echo "10process end"
+./data_processing.sh proc_input.chr11.vcf chr11
+echo "11process end"
+./data_processing.sh proc_input.chr12.vcf chr12
+echo "12process end"
+./data_processing.sh proc_input.chr13.vcf chr13
+echo "13process end"
+./data_processing.sh proc_input.chr14.vcf chr14
+echo "14process end"
+./data_processing.sh proc_input.chr15.vcf chr15
+echo "15process end"
+./data_processing.sh proc_input.chr16.vcf chr16
+echo "16process end"
+./data_processing.sh proc_input.chr18.vcf chr18
+echo "17process end"
+./data_processing.sh proc_input.chr19.vcf chr19
+echo "18process end"
+./data_processing.sh proc_input.chr20.vcf chr20
+echo "19process end"
+./data_processing.sh proc_input.chr21.vcf chr21
+echo "20process end"
+./data_processing.sh proc_input.chr22.vcf chr22
+echo "21process end"
+./data_processing.sh proc_input.chrX.vcf chrX
+echo "Xprocess end"
+

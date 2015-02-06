@@ -1,0 +1,74 @@
+.
+├── OLD
+│   ├── alldata_proc.sh
+│   ├── check_diabetes.py
+│   ├── chr_gunzip.sh
+│   ├── cluster.py
+│   ├── cluster3.py
+│   ├── cluster_allele.py
+│   ├── cps_support.py
+│   ├── data_processing.sh
+│   ├── del_overlap.py
+│   ├── gap.py
+│   ├── min_max.py
+│   ├── min_max_00.py
+│   ├── mongodb.sh
+│   ├── mysql_ilm.py
+│   ├── openid.freq.py
+│   ├── sampleToinfo.py
+│   ├── sample_proc.sh
+│   ├── sample_proc_00.sh
+│   ├── set_clinvar.py
+│   ├── str_plot.R
+│   ├── str_plot_JC.R
+│   └── var.py
+├── add_annotations
+│   ├── extract_anno.py
+│   ├── missene_value.py
+│   ├── missense.py
+│   └── snp_gene.py
+├── analysis_opensnp
+│   ├── create_hdr.py
+│   ├── dbtest.py
+│   ├── dl_html.py
+│   ├── edit_html.py
+│   ├── get_pop.py
+│   ├── openid_freq.py
+│   ├── osp_set.py
+│   ├── phenotype.py
+│   ├── tam_id.py
+│   ├── tying_osp.py
+│   ├── update.py
+│   └── url.ping.py
+├── examine_phase3
+│   ├── create_dbdata.py
+│   └── pid_psp.py
+├── linking_clinvar
+│   ├── overlap.py
+│   ├── vcf_edit.py
+│   └── xmlparser.py
+├── machine_learning
+│   ├── calc_wc.py
+│   ├── check_anc.py
+│   ├── clinvar.py
+│   ├── cod_readID.py
+│   ├── create_cpssnps.py
+│   ├── create_mongo_snp.py
+│   ├── extract_ilm.py
+│   ├── extract_pred.py
+│   ├── get_samples_pop.py
+│   ├── homo_hetero.py
+│   ├── learning_sample.py
+│   ├── loo_check.py
+│   ├── osp_svm.py
+│   ├── ped_to_csv.py
+│   ├── sample_snp.py
+│   ├── sort_rf.py
+│   └── use_svm_transition.py
+├── other
+│   ├── gap.R
+│   ├── mongodb.sh
+│   └── sort_gap.R
+└── tree.txt
+
+7 directories, 64 files
