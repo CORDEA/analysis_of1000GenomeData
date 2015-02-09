@@ -33,7 +33,7 @@ from optparse import OptionParser
 
 def optSettings():
     u"""コマンドラインオプションの管理関数"""
-    usage   = "%prog [-ioce] [options] [-s] [--concat] [--silent] [file]\nDetailed options -h or --help"
+    usage   = "%prog [-op] [file]\nDetailed options -h or --help"
     version = __version__
     parser  = OptionParser(usage=usage, version=version)
 

@@ -33,25 +33,25 @@ from optparse import OptionParser
 
 def optSettings():
     u"""コマンドラインオプションの管理関数"""
-    usage   = "%prog [-ioce] [options] [-s] [--concat] [--silent] [file]\nDetailed options -h or --help"
+    usage   = "%prog [-cp] [file]\nDetailed options -h or --help"
     version = __version__
     parser  = OptionParser(usage=usage, version=version)
 
     parser.add_option(
-        '-o', '--output',
-        action  = 'store',
-        type    = 'str',
-        dest    = 'output_file',
-        default = 'result/',
-        help    = 'Set output directory (ex. result/) [default: %default]'
-    )
-
-    parser.add_option(
-        '-c', '--count',
+        '-e', '--extract',
         action  = 'store_true',
         dest    = 'count',
         default = False,
-        help    = 'Set number of worker processes (ex. 8) [default: %default (use all CPU cores)]'
+        help    = 'whether to extraction of SNP. [default: %default]'
+    )
+
+    parser.add_option(
+        '-p', '--prediction',
+        action  = 'store',
+        type    = 'str',
+        dest    = 'prediction_file',
+        default = None,
+        help    = 'Extend the specified area. (ex. 0) [default: %default]'
     )
 
     return parser.parse_args()
@@ -63,14 +63,18 @@ class FeatureExtraction:
         except:
             print "input file is not specified."
             sys.exit()
-        self._COUNT = options.count
+        self._COUNT    = options.count
+        self._PREDFILE = options.prediction_file
 
     def Initialize(self, c):
         print "start initialize"
         _INFILE = self._INFILE
         items   = _INFILE.split("_")
+        PATH    = '/'.join(items[:-1]) + '/'
         CODE    = items[1].upper()
         COUNTER = int(items[2]) + c
+
+        self.PATH    = PATH
         self.COUNTER = COUNTER
         self.CODE    = CODE
 
@@ -78,7 +82,7 @@ class FeatureExtraction:
             with open(_INFILE) as f:
                 lines = f.readlines()
         else:
-            with open("rf_" + items[1] + "_" + str(COUNTER) + "_importances.csv") as f:
+            with open(PATH + "rf_" + items[1] + "_" + str(COUNTER) + "_importances.csv") as f:
                 lines = f.readlines()
 
         DELIMITER = ","
@@ -91,7 +95,6 @@ class FeatureExtraction:
 
         with open("sample_population.csv") as f:
             lines = f.readlines()
-
 
         idDict = {}
         Pass   = False
@@ -106,17 +109,19 @@ class FeatureExtraction:
             # 民族判別SNP(SPC)
             if "SPC"  == CODE:
                 idDict[tmp[0]] = tmp[2]
-            # 民族判別SNP(ASN, AFR, AMR, EUR)
-            if CODE in ["ASN", "AFR", "AMR", "EUR"]:
-                if tmp[2] == CODE:
-                    idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
-                Pass = True
-            # 民族固有SNP
-            if not Pass:
-                if tmp[1] == CODE:
-                    idDict[tmp[0]] = tmp[1] + ":" + tmp[2]
+            else:
+                value = ':'.join(tmp[1:])
+
+                # 民族判別SNP(ASN, AFR, AMR, EUR)
+                if CODE in ["ASN", "AFR", "AMR", "EUR"]:
+                    if tmp[2] == CODE:
+                        idDict[tmp[0]] = value
                 else:
-                    idDict[tmp[0]] = "OTH"
+                    # 民族固有SNP
+                    if tmp[1] == CODE:
+                        idDict[tmp[0]] = value
+                    else:
+                        idDict[tmp[0]] = "OTH"
 
         return self.Learning([idDict, readID])
 
@@ -127,14 +132,17 @@ class FeatureExtraction:
 
         idDict = data[0]
         readID = data[1]
+
         data_tr  = []
         label_tr = []
-        count = 0
+
+        count  = 0
         infile = open(ORIGINAL, "r")
 
-        idList = []
-        IDs = []
-        header = True
+        idList    = []
+        idIndexes = []
+
+        header    = True
         
         line = infile.readline()
         while line:
@@ -144,27 +152,27 @@ class FeatureExtraction:
                 for label in data:
                     if label in idDict:
                         label_tr.append(idDict[label])
-                        IDs.append(data.index(label))
+                        idIndexes.append(data.index(label))
                 header = False
             else:
                 rsID = tmp[2]
                 if COUNTER == -1:
                     idList.append(rsID)
-                    for i in range(len(IDs)):
+                    for i in range(len(idIndexes)):
                         try:
-                            data_tr[i].append(int(data[IDs[i]]))
+                            data_tr[i].append(int(data[idIndexes[i]]))
                         except:
                             data_tr.append([])
-                            data_tr[i].append(int(data[IDs[i]]))
+                            data_tr[i].append(int(data[idIndexes[i]]))
                 else:
                     if rsID in readID:
                         idList.append(rsID)
-                        for i in range(len(IDs)):
+                        for i in range(len(idIndexes)):
                             try:
-                                data_tr[i].append(int(data[IDs[i]]))
+                                data_tr[i].append(int(data[idIndexes[i]]))
                             except:
                                 data_tr.append([])
-                                data_tr[i].append(int(data[IDs[i]]))
+                                data_tr[i].append(int(data[idIndexes[i]]))
             line = infile.readline()
 
         infile.close()
@@ -173,62 +181,98 @@ class FeatureExtraction:
 
     def Training(self, data):
         print "training data loading ..."
-        data_tr  = data[0]
-        label_tr = data[1]
-        idList   = self.idList
+        data_tr   = data[0]
+        label_tr  = data[1]
+        idList    = self.idList
+
+        _PREDFILE = self._PREDFILE
 
         rfDict   = {}
         
         X = np.array(data_tr)
         Y = np.array(label_tr)
 
-        estimator = RandomForestClassifier(
-                n_estimators=200,
-                max_features='sqrt')
+        if _PREDFILE:
+            u"""Grid searchにおけるパラメータ候補群
+            n_estimators : integer
+                決定木を何本作成するか. 
+            max_depth    : integer or None
+                決定木の深さをどこまで許容するか. 
+            bootstrap    : True or False
+                Bootstrapによって得られた標本によって決定木を構築するかどうか. 
+            criterion    : gini or entropy
+                不純度の算出に用いる基準, 質問の選択に関与する.
+
+            ref. http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+            """
+            r_pars = [
+                    {
+                        "max_depth"          : [3, None],
+                        "bootstrap"          : [True, False],
+                        "criterion"          : ["gini", "entropy"]
+                        }
+                    ]
+            data_score = 0.0
+            len_xy = Y.shape[0]
+            est = RandomForestClassifier(
+                    n_estimators=2000,
+                    max_features='sqrt') 
+
+            estimator = GridSearchCV(est, r_pars)
+        else:
+            estimator = RandomForestClassifier(
+                    n_estimators=200,
+                    max_features='sqrt')
 
         start = time.clock()
         scores = cross_validation.cross_val_score(estimator, X, Y, cv=14, n_jobs=-1)
         end = time.clock()
 
-        data_score = float(scores.mean())
+        if not _PREDFILE:
+            data_score = float(scores.mean())
 
         print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
         print("Processing time: " + str(end - start) + " s")
 
         estimator.fit(X, Y)
             
-        bfr = aft = 0
-        importances = estimator.feature_importances_
-        for i in range(len(importances)):
-            rfDict[idList[i]] = float(importances[i])
-        bfr = len(rfDict)
-        Min = min(rfDict.itervalues())
-        Max = max(rfDict.itervalues())
-        for k, v in rfDict.items():
-            if v == Min:
-                del rfDict[k]
-        aft = len(rfDict)
-        print("scraping the explanatory variables of " + str(bfr - aft))
+        if _PREDFILE:
+            estimator = RandomForestClassifier(
+                        n_estimators=2000,
+                        max_depth=estimator.best_estimator_.max_depth,
+                        max_features='sqrt', 
+                        bootstrap=estimator.best_estimator_.bootstrap,
+                        criterion=estimator.best_estimator_.criterion
+                        )
+            estimator.fit(X, Y)
+        else:
+            bfr = aft = 0
+            importances = estimator.feature_importances_
+            for i in range(len(importances)):
+                rfDict[idList[i]] = float(importances[i])
+            bfr = len(rfDict)
+            Min = min(rfDict.itervalues())
+            Max = max(rfDict.itervalues())
+            for k, v in rfDict.items():
+                if v == Min:
+                    del rfDict[k]
+            aft = len(rfDict)
+            print("scraping the explanatory variables of " + str(bfr - aft))
 
         labels = estimator.classes_
 
-        return [estimator, labels], rfDict, data_score, str(bfr - aft)
+        if _PREDFILE:
+            return [estimator, labels]
+        else:
+            return [estimator, labels], rfDict, data_score, str(bfr - aft)
 
-if __name__ == '__main__':
-    # [[ OPTION ]]
-    # 特徴選択で識別率低下を何％まで許容するか
-    ALLOW = 0.10
-    criteria = 0.0 + ALLOW
+def extractSNPs(fe):
+    # 特徴選択で識別率を何％まで許容するか
+    ALLOW = 0.60
 
-    _DIR  = ""
-    
     c = 0
     logList = []
 
-    options, args = optSettings()
-    fe = FeatureExtraction(options, args)
-    day = date.today().timetuple()
-    code = str(day[0]) + str(day[1]) + str(day[2])
     while True:
         tra_data, rfDict, data_score, scr = fe.Initialize(c)
 
@@ -236,18 +280,32 @@ if __name__ == '__main__':
             if c == 0:
                 logList.append([fe.COUNTER + c, data_score, str(0)])
             else:
-                logList.append([fe.COUNTER + c, data_score, "-"+str(scr)])
-            if criteria < data_score:
-                criteria = data_score
-            elif (criteria - ALLOW) >= data_score:
+                logList.append([fe.COUNTER + c, data_score, '-' + str(scr)])
+            if ALLOW >= data_score:
                 print "Accuracy rate is lower than the set value."
                 break
-            filename = _DIR + "rf_" + fe.CODE.lower() + "_" + str(int(fe.COUNTER) + 1) + "_importances.csv"
-            with open(filename, "w") as f:
+            filename = "rf_" + fe.CODE.lower() + "_" + str(int(fe.COUNTER) + 1) + "_importances.csv"
+            with open(fe.PATH + filename, "w") as f:
                 for k, v in rfDict.items():
                     f.write(str(k) + "," + str(v) + "\n")
+        else:
+            break
         c += 1
 
-    with open("log", "w") as f:
-        for v in logList:
-            logFile.write(",".join(v) + "\n")
+    if len(logList) > 0:
+        with open(fe.PATH + "extract.log", "w") as f:
+            for v in logList:
+                f.write(",".join([str(r) for r in v]) + "\n")
+
+def main():
+    options, args = optSettings()
+    fe = FeatureExtraction(options, args)
+
+    if fe._PREDFILE:
+        tra_data = fe.Initialize()
+        fe.Prediction(tra_data)
+    else:
+        extractSNPs(fe)
+
+if __name__ == '__main__':
+    main()
