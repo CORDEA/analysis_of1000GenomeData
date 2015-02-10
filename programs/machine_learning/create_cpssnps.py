@@ -1,35 +1,46 @@
-#!/bin/env python
+#!/usr/bin/env python
 # encoding:utf-8
 #
+# Copyright [2015] [Yoshihiro Tanaka]
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
-__Author__  =  "CORDEA"
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+__Author__  =  "Yoshihiro Tanaka"
 __date__    =  "2014-08-20"
 __version__ =  "1.4.3"
 
 u"""SVM_for_samples 検体データに機械学習による人種推定をさせるためのプログラム
 
-　LAST_UPDATE = 2014-10-07
+　LAST_UPDATE = 2015-02-09
 
 """
 
 from sklearn import cross_validation
-from sklearn.cross_validation import LeaveOneOut, StratifiedKFold
-from sklearn.svm import LinearSVC, SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.grid_search import GridSearchCV
-from sklearn.feature_selection import RFE, RFECV
-import numpy as np
-import os, commands, sys, random, time
-from datetime import date
-
 from optparse import OptionParser
-# 学習データ
-# [[a, b, c], [a, b, c], [a, b, c], ...]
-# 正解情報
-# [1, 2, 0, ...]
-# 試験データ
-# [a, b, c]
+
+import numpy as np
+import os, sys, time
+
+u"""
+トレーニングデータ
+    [[a, b, c], [a, b, c], [a, b, c], ...]
+正解情報
+    [1, 2, 0, ...]
+テストデータ
+    [a, b, c]
+"""
 
 def optSettings():
     u"""コマンドラインオプションの管理関数"""
@@ -41,8 +52,7 @@ def optSettings():
         '-e', '--extract',
         action  = 'store_true',
         dest    = 'count',
-        default = False,
-        help    = 'whether to extraction of SNP. [default: %default]'
+        default = False
     )
 
     parser.add_option(
@@ -50,8 +60,7 @@ def optSettings():
         action  = 'store',
         type    = 'str',
         dest    = 'prediction_file',
-        default = None,
-        help    = 'Extend the specified area. (ex. 0) [default: %default]'
+        default = None
     )
 
     return parser.parse_args()
@@ -67,9 +76,10 @@ class FeatureExtraction:
         self._PREDFILE = options.prediction_file
 
     def Initialize(self, c):
-        print "start initialize"
         _INFILE = self._INFILE
-        items   = _INFILE.split("_")
+
+        items   = _INFILE.split('_')
+
         PATH    = '/'.join(items[:-1]) + '/'
         CODE    = items[1].upper()
         COUNTER = int(items[2]) + c
@@ -79,13 +89,14 @@ class FeatureExtraction:
         self.CODE    = CODE
 
         if COUNTER == int(items[2]):
-            with open(_INFILE) as f:
-                lines = f.readlines()
+            filename = _INFILE
         else:
-            with open(PATH + "rf_" + items[1] + "_" + str(COUNTER) + "_importances.csv") as f:
-                lines = f.readlines()
+            filename = '_'.join(["rf", items[1], str(COUNTER), "importances.csv"])
 
-        DELIMITER = ","
+        with open(PATH + filename) as f:
+            lines = f.readlines()
+
+        DELIMITER = ','
         POSITION  = 0
 
         readID = []
@@ -99,7 +110,7 @@ class FeatureExtraction:
         idDict = {}
         Pass   = False
         for line in lines:
-            tmp = line.rstrip().split(",")
+            tmp = line.rstrip().split(',')
             u"""
             tmp[0]: sample number
             tmp[1]: Population Code
@@ -126,71 +137,60 @@ class FeatureExtraction:
         return self.Learning([idDict, readID])
 
     def Learning(self, data):
-        print "learning data loading ..."
         ORIGINAL = "ilm_set.vcf"
         COUNTER  = self.COUNTER
 
         idDict = data[0]
         readID = data[1]
 
-        data_tr  = []
-        label_tr = []
-
-        count  = 0
-        infile = open(ORIGINAL, "r")
+        data_tr   = []
+        label_tr  = []
 
         idList    = []
         idIndexes = []
 
-        header    = True
-        
+        count  = 0
+        infile = open(ORIGINAL, 'r')
+
         line = infile.readline()
         while line:
-            tmp = line.rstrip().split(",")
-            data = tmp[5].split("|")
-            if header:
+            tmp = line.rstrip().split(',')
+            data = tmp[6].split('|')
+            if line[0] == '#':
                 for label in data:
                     if label in idDict:
                         label_tr.append(idDict[label])
                         idIndexes.append(data.index(label))
-                header = False
             else:
                 rsID = tmp[2]
                 if COUNTER == -1:
                     idList.append(rsID)
-                    for i in range(len(idIndexes)):
-                        try:
-                            data_tr[i].append(int(data[idIndexes[i]]))
-                        except:
-                            data_tr.append([])
-                            data_tr[i].append(int(data[idIndexes[i]]))
+                    data_tr = createData(data, data_tr, idIndexes)
                 else:
                     if rsID in readID:
                         idList.append(rsID)
-                        for i in range(len(idIndexes)):
-                            try:
-                                data_tr[i].append(int(data[idIndexes[i]]))
-                            except:
-                                data_tr.append([])
-                                data_tr[i].append(int(data[idIndexes[i]]))
+                        data_tr = createData(data, data_tr, idIndexes)
             line = infile.readline()
-
         infile.close()
-        self.idList = idList
-        return self.Training([data_tr, label_tr])
 
-    def Training(self, data):
-        print "training data loading ..."
-        data_tr   = data[0]
-        label_tr  = data[1]
-        idList    = self.idList
+        return self.Training([data_tr, label_tr], idList)
+
+    def createData(data, data_tr, idIndexes):
+        for i in range(len(idIndexes)):
+            try:
+                data_tr[i].append(int(data[idIndexes[i]]))
+            except:
+                data_tr.append([])
+                data_tr[i].append(int(data[idIndexes[i]]))
+        return data_tr
+
+    def Training(self, data, idList):
+        X = np.array(data[0])
+        Y = np.array(data[1])
 
         _PREDFILE = self._PREDFILE
 
         rfDict   = {}
-        
-        X = np.array(data_tr)
-        Y = np.array(label_tr)
 
         if _PREDFILE:
             u"""Grid searchにおけるパラメータ候補群
@@ -205,38 +205,39 @@ class FeatureExtraction:
 
             ref. http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
             """
-            r_pars = [
-                    {
-                        "max_depth"          : [3, None],
-                        "bootstrap"          : [True, False],
-                        "criterion"          : ["gini", "entropy"]
-                        }
-                    ]
-            data_score = 0.0
+            r_pars = [{
+                        "max_depth" : [3, None],
+                        "bootstrap" : [True, False],
+                        "criterion" : ["gini", "entropy"]
+                        }]
             len_xy = Y.shape[0]
             est = RandomForestClassifier(
                     n_estimators=2000,
                     max_features='sqrt') 
 
+            # predictionではできるだけ良い結果を得るためにGridSearch
             estimator = GridSearchCV(est, r_pars)
         else:
+            # 抽出段階では計算時間を早めるためにGridSearchを行わず, 決定木数も200
             estimator = RandomForestClassifier(
                     n_estimators=200,
                     max_features='sqrt')
 
         start = time.clock()
+        # cross-validation (scikitではデフォルトでStratified K-fold)
         scores = cross_validation.cross_val_score(estimator, X, Y, cv=14, n_jobs=-1)
         end = time.clock()
 
         if not _PREDFILE:
             data_score = float(scores.mean())
 
-        print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+        print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2)) # 標準偏差*2 95%信頼区間
         print("Processing time: " + str(end - start) + " s")
 
         estimator.fit(X, Y)
             
         if _PREDFILE:
+            # GridSearchの結果から一番良いパラメータを得る
             estimator = RandomForestClassifier(
                         n_estimators=2000,
                         max_depth=estimator.best_estimator_.max_depth,
@@ -251,10 +252,8 @@ class FeatureExtraction:
             for i in range(len(importances)):
                 rfDict[idList[i]] = float(importances[i])
             bfr = len(rfDict)
-            Min = min(rfDict.itervalues())
-            Max = max(rfDict.itervalues())
             for k, v in rfDict.items():
-                if v == Min:
+                if v == min(rfDict.itervalues()):
                     del rfDict[k]
             aft = len(rfDict)
             print("scraping the explanatory variables of " + str(bfr - aft))
@@ -278,24 +277,26 @@ def extractSNPs(fe):
 
         if fe._COUNT:
             if c == 0:
-                logList.append([fe.COUNTER + c, data_score, str(0)])
+                scr = '0'
             else:
-                logList.append([fe.COUNTER + c, data_score, '-' + str(scr)])
+                scr = '-' + str(scr)
+            logList.append([fe.COUNTER + c, data_score, scr])
+
             if ALLOW >= data_score:
                 print "Accuracy rate is lower than the set value."
                 break
-            filename = "rf_" + fe.CODE.lower() + "_" + str(int(fe.COUNTER) + 1) + "_importances.csv"
-            with open(fe.PATH + filename, "w") as f:
+            filename = '_'.join(["rf", fe.CODE.lower(), str(int(fe.COUNTER) + 1), "importances.csv"])
+            with open(fe.PATH + filename, 'w') as f:
                 for k, v in rfDict.items():
-                    f.write(str(k) + "," + str(v) + "\n")
+                    f.write(str(k) + ',' + str(v) + "\n")
         else:
             break
         c += 1
 
     if len(logList) > 0:
-        with open(fe.PATH + "extract.log", "w") as f:
+        with open(fe.PATH + "extract.log", 'w') as f:
             for v in logList:
-                f.write(",".join([str(r) for r in v]) + "\n")
+                f.write(','.join([str(r) for r in v]) + "\n")
 
 def main():
     options, args = optSettings()
